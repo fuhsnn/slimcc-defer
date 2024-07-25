@@ -2174,6 +2174,13 @@ static Node *stmt(Token **rest, Token *tok, bool is_labeled) {
   if (equal(tok, "{"))
     return compound_stmt(rest, tok->next, ND_BLOCK);
 
+  if (equal(tok, "defer")) {
+    DeferStmt *defr = new_defr(DF_DEFER_STMT);
+    defr->stmt = secondary_block(rest, tok->next);
+    add_type(defr->stmt);
+    return new_node(ND_NULL_STMT, tok);
+  }
+
   return expr_stmt(rest, tok);
 }
 

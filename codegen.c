@@ -1217,6 +1217,11 @@ static void gen_defr(Node *node) {
       defr = defr->next;
       continue;
     }
+    if (defr->kind == DF_DEFER_STMT) {
+      gen_stmt(defr->stmt);
+      defr = defr->next;
+      continue;
+    }
     internal_error();
   }
 }
