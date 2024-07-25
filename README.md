@@ -1,61 +1,69 @@
-This is a fork of [Rui Ueyama's chibicc](https://github.com/rui314/chibicc) with [fixes](https://github.com/fuhsnn/slimcc/issues?q=is%3Aissue+is%3Aclosed+label%3Aupstream) and [improvements](#changes-over-chibicc).
+This is a small patch on top of [slimcc](https://github.com/fuhsnn/slimcc) to enable compiler-level `defer` functionality.
 
-# Project goal
- - Compile correct code correctly.
- - Code readability.
- - Build real world projects, test with their suites.
- - Implement GNU extensions and C23 features if doable.
- - Match GCC / Clang's behavior when possible.
+Based on the [n3199 proposal](https://www.open-std.org/jtc1/sc22/wg14/www/docs/n3199.htm).
 
-# Building & Running
- - Should just work on recent glibc-based (2.28+) x86-64 Linux. Also see [porting](#porting)
- - Test script needs `bash`; depending on the distro, `file` and/or `glibc-static` packages may be required.
+## Building
+
+On recent-ish glibc x86-64 Linux, simply `make` or `cc *.c`.
+
+## Testing
+
+Example from [n3199](https://www.open-std.org/jtc1/sc22/wg14/www/docs/n3199.htm):
 ```
-git clone --depth 1 https://github.com/fuhsnn/slimcc
-cd slimcc
-make test-stage2 -j
+#include <stdbool.h>
+#include <stdio.h>
+
+int ex2(void) {
+  int r = 4;
+  int* p = &r;
+  defer { *p = 5; }
+  return *p; // return 4;
+}
+
+int ex5(void) {
+  int r = 0;
+  {
+    defer {
+      defer r *= 4;
+      r *= 2;
+      defer {
+        r += 3;
+      }
+    }
+    defer r += 1;
+  }
+  return r; // return 20;
+}
+
+int main () {
+  printf("%d\n", ex2());
+  printf("%d\n", ex5());
+
+  // ex4
+  {
+    defer {
+      printf(" meow");
+    }
+    if (true)
+      defer printf("cat");
+    printf(" says");
+  }
+  printf("\n");
+  return 0;
+}
 ```
-Run it in base directory like `CC=~/slimcc/slimcc`.
-
-# What can it build?
-I regularly attempt to keep up with latest versions of Curl, Git, Python, PostgreSQL, Sqlite, Vim etc.
-
-Check out [widcc's list](https://github.com/fuhsnn/widcc?tab=readme-ov-file#building-real-world-projects) for detailed build scripts.
-
-# Can it pass `csmith`?
-1M tests were run with `--no-packed-struct` flag, all issues found were fixed.
-
-# How optimized are the generated binaries?
-The codegen strategy is matching AST nodes to hard-coded assembly snippets and glue them with data movements.
-
-Some optimizations can be made with this by pattern-matching to smarter alternatives, I apply them when effective and don't mess up readability.
-
-Compare size of chibicc binary built with several compilers:
+The output should be:
 ```
-      text       data        bss      total filename
-    112363      43987        616     156966 gcc_O0_build
-    113867      43156        504     157527 clang_O0_build
-    138747      31913        456     170972 slimcc_build
-    144896      29536        440     174872 tcc_build
-    263659      41163        456     305278 chibicc_build
+4
+20
+cat says meow
 ```
-In general, code size is on par with TinyCC but execute 30% slower. Much work to be done!
+## Implementation Experience
 
-# Changes over chibicc
- - Written in C99
- - New algorithm for macro expansion, better support for [deep recursion tricks](https://stackoverflow.com/a/70342272)
- - `setjmp.h` compatibility
- - Support `_Static_assert()`, `__has_include`
- - Support C23 `constexpr` and `auto` type inference
- - Support variably-modified types in function prototype (aka VLA parameters)
- - Support VLA auto-deallocation
- - Basic stack reuse optimization
- - Basic register allocation of temporaries
- - Constant folding and basic strength reduction
- - More involved x86-64 instruction selection
+slimcc had implemented C99 VLA de-allocation, therefore a basic structure was already in place for tracking VLA declarations (and their effect on stack pointer) across blocks and gotos; it was trivial to extend it to defer statements.
 
-# Porting
-musl linux and BSDs should be doable. Check hard-coded paths in `main.c`, and pre-defined macros in `preprocessor.c`.
-The biggest obstacle would be GNU inline assembly in some headers. Which is not supported yet.
+`__attribute__((cleanup(fn)))` was implemented next, as hidden `defer fn(&obj)`s following each declaration. Other than parsing the attribute, most of the work was in code generation, dealing with return values potentially clobbered by cleanup functions.
 
-The [`widcc`](https://github.com/fuhsnn/widcc) branch is a less noisy codebase than `slimcc` that should be more appealing for developers to hack on.
+Lastly, since the compiler got away with not handling secondary-blocks as having their own scope, that had to be fixed.
+
+The actual `defer` parsing bits slid-in gracefully thanks to [chibicc](https://github.com/rui314/chibicc)'s neat design, which slimcc is based on.
