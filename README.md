@@ -2,6 +2,8 @@ This is a small patch on top of [slimcc](https://github.com/fuhsnn/slimcc) to en
 
 Based on the [n3199 proposal](https://www.open-std.org/jtc1/sc22/wg14/www/docs/n3199.htm).
 
+UPDATE: The feature has been merged in upstream slimcc, use `_Defer` or enable `defer` with `-fdefer-ts` flag.
+
 ## Building
 
 On recent-ish glibc x86-64 Linux, simply `make` or `cc *.c`.
